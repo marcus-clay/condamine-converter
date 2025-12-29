@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#F9FAFB" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Condamine">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="icon.svg">
+    <link rel="apple-touch-icon" href="icon.svg">
+    
+    <meta name="description" content="Convertisseur de devises et crypto-monnaies design et précis.">
+    <title>Condamine Converter</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'media', // Respect system preferences
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        dark: { bg: '#050505', panel: 'rgba(20, 20, 20, 0.7)' }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Html2Canvas -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Analytics Placeholder -->
+    <script>
+        window.logEvent = (name, details) => console.log(`Analytics: ${name}`, details);
+    </script>
+
+    <!-- SW Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        input:focus { outline: none; }
+        input { -webkit-appearance: none; appearance: none; }
+
+        /* Glassmorphism Light/Dark */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
+        }
+        @media (prefers-color-scheme: dark) {
+            .glass-panel {
+                background: rgba(30, 30, 30, 0.6);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            }
+        }
+
+        .fade-in { animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .slide-up { animation: slideUp 0.4s cubic-bezier(0.19, 1, 0.22, 1); }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        .shake-anim { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+    </style>
+</head>
+<body class="h-[100dvh] w-screen bg-gray-50 dark:bg-black text-gray-900 dark:text-white transition-colors duration-500">
+
+    <div id="root" class="h-full w-full"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- Utils ---
+        const playThock = () => {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                const ctx = new AudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(350, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.start(); osc.stop(ctx.currentTime + 0.1);
+            } catch (e) {}
+        };
+        const feedback = () => { if (navigator.vibrate) navigator.vibrate(8); playThock(); };
+
+        // --- Data ---
+        const CURRENCIES = [
+            { code: 'USD', name: 'Dollar Américain', flag: 'us', symbol: '$', color: 'from-emerald-100 to-emerald-50 dark:from-emerald-900/30 dark:to-emerald-950/30', accent: 'text-emerald-600 dark:text-emerald-400', type: 'fiat' },
+            { code: 'EUR', name: 'Euro', flag: 'eu', symbol: '€', color: 'from-blue-100 to-blue-50 dark:from-blue-900/30 dark:to-blue-950/30', accent: 'text-blue-600 dark:text-blue-400', type: 'fiat' },
+            { code: 'GBP', name: 'Livre Sterling', flag: 'gb', symbol: '£', color: 'from-violet-100 to-violet-50 dark:from-violet-900/30 dark:to-violet-950/30', accent: 'text-violet-600 dark:text-violet-400', type: 'fiat' },
+            { code: 'JPY', name: 'Yen Japonais', flag: 'jp', symbol: '¥', color: 'from-rose-100 to-rose-50 dark:from-rose-900/30 dark:to-rose-950/30', accent: 'text-rose-600 dark:text-rose-400', type: 'fiat' },
+            { code: 'CHF', name: 'Franc Suisse', flag: 'ch', symbol: 'Fr', color: 'from-red-100 to-red-50 dark:from-red-900/30 dark:to-red-950/30', accent: 'text-red-600 dark:text-red-400', type: 'fiat' },
+            { code: 'CNY', name: 'Yuan Chinois', flag: 'cn', symbol: '¥', color: 'from-orange-100 to-orange-50 dark:from-orange-900/30 dark:to-orange-950/30', accent: 'text-orange-600 dark:text-orange-400', type: 'fiat' },
+            { code: 'BTC', name: 'Bitcoin', iconUrl: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png', symbol: '₿', color: 'from-yellow-100 to-amber-50 dark:from-yellow-900/30 dark:to-amber-950/30', accent: 'text-amber-600 dark:text-amber-400', type: 'crypto', coinId: 'bitcoin' },
+            { code: 'ETH', name: 'Ethereum', iconUrl: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png', symbol: 'Ξ', color: 'from-slate-200 to-slate-100 dark:from-slate-800 dark:to-slate-900', accent: 'text-slate-600 dark:text-slate-400', type: 'crypto', coinId: 'ethereum' },
+            { code: 'SOL', name: 'Solana', iconUrl: 'https://assets.coingecko.com/coins/images/4128/small/solana.png', symbol: '◎', color: 'from-purple-100 to-fuchsia-50 dark:from-purple-900/30 dark:to-fuchsia-950/30', accent: 'text-purple-600 dark:text-purple-400', type: 'crypto', coinId: 'solana' },
+            // Fallback for others
+            { code: 'AUD', name: 'Dollar Australien', flag: 'au', symbol: '$', color: 'from-gray-100 to-gray-50 dark:from-gray-800 dark:to-black', accent: 'text-gray-600 dark:text-gray-400', type: 'fiat' },
+            { code: 'CAD', name: 'Dollar Canadien', flag: 'ca', symbol: '$', color: 'from-gray-100 to-gray-50 dark:from-gray-800 dark:to-black', accent: 'text-gray-600 dark:text-gray-400', type: 'fiat' },
+            // ... Add more if needed, ensuring they have fallback styles
+        ];
+
+        const DEFAULT_COLOR = 'from-gray-100 to-gray-50 dark:from-gray-900 dark:to-black';
+        const DEFAULT_ACCENT = 'text-gray-600 dark:text-gray-400';
+
+        const getCurrencyInfo = (code) => {
+            const found = CURRENCIES.find(c => c.code === code);
+            if (found) return found;
+            return { code, name: code, flag: 'un', symbol: code, color: DEFAULT_COLOR, accent: DEFAULT_ACCENT, type: 'fiat' };
+        };
+
+        // --- Splash Screen ---
+        const SplashScreen = ({ onComplete }) => {
+            const [exiting, setExiting] = useState(false);
+            
+            useEffect(() => {
+                const timer = setTimeout(() => setExiting(true), 2000);
+                const complete = setTimeout(onComplete, 2500);
+                return () => { clearTimeout(timer); clearTimeout(complete); };
+            }, []);
+
+            return (
+                <div className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gray-50 dark:bg-black transition-opacity duration-500 ${exiting ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                    <div className="flex flex-col items-center animate-bounce-slow">
+                        <div className="w-24 h-24 bg-blue-600 dark:bg-blue-500 rounded-3xl shadow-xl flex items-center justify-center text-white mb-6">
+                            <i className="ph ph-arrows-left-right text-5xl"></i>
+                        </div>
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Condamine Converter</h1>
+                        <p className="text-gray-400 text-sm mt-2 font-medium">Design & Précision</p>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Sparkline Graph ---
+        const Sparkline = ({ currencyFrom, currencyTo, currentRate }) => {
+            const points = useMemo(() => {
+                const arr = [];
+                let val = currentRate;
+                for(let i=0; i<7; i++) {
+                    val = val * (1 + (Math.random() * 0.04 - 0.02));
+                    arr.unshift(val);
+                }
+                return arr;
+            }, [currencyFrom, currencyTo]); 
+
+            const min = Math.min(...points);
+            const max = Math.max(...points);
+            const range = max - min || 1;
+            
+            // SVG Path
+            const width = 100; 
+            const height = 30;
+            const pathD = points.map((p, i) => {
+                const x = (i / (points.length - 1)) * width;
+                const y = height - ((p - min) / range) * height;
+                return `${i===0?'M':'L'} ${x},${y}`;
+            }).join(' ');
+
+            const isUp = points[points.length-1] >= points[0];
+            const colorClass = isUp ? 'stroke-green-500' : 'stroke-red-500';
+
+            return (
+                <div className="w-full h-8 mt-2 opacity-80">
+                    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+                        <path d={pathD} fill="none" strokeWidth="2" className={colorClass} strokeLinecap="round" strokeLinejoin="round" />
+                        <circle cx={width} cy={height - ((points[points.length-1] - min) / range) * height} r="3" className={isUp ? 'fill-green-500' : 'fill-red-500'} />
+                    </svg>
+                    <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-1">
+                        <span>Il y a 7 jours</span>
+                        <span>Aujourd'hui</span>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Currency Modal ---
+        const CurrencyPicker = ({ isOpen, onClose, onSelect, selectedCode, title, favorites, toggleFavorite }) => {
+            const [search, setSearch] = useState("");
+            const searchRef = useRef(null);
+            useEffect(() => { if (isOpen && searchRef.current) setTimeout(() => searchRef.current.focus(), 100); setSearch(""); }, [isOpen]);
+            if (!isOpen) return null;
+
+            const filtered = CURRENCIES.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.code.toLowerCase().includes(search.toLowerCase()));
+            const favList = filtered.filter(c => favorites.includes(c.code));
+            const otherList = filtered.filter(c => !favorites.includes(c.code));
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 backdrop-blur-md transition-all duration-300">
+                    <div className="bg-white dark:bg-gray-900 w-full h-[95dvh] sm:h-[80%] sm:w-[420px] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col slide-up overflow-hidden pb-safe">
+                        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
+                            <button onClick={() => { feedback(); onClose(); }} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors dark:text-white">
+                                <i className="ph ph-x text-lg"></i>
+                            </button>
+                        </div>
+                        <div className="p-4 pb-2">
+                            <div className="relative bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center px-4 h-12 border border-transparent focus-within:border-blue-500/30 focus-within:dark:bg-gray-800 focus-within:shadow-sm transition-all">
+                                <i className="ph ph-magnifying-glass text-gray-400 text-lg"></i>
+                                <input ref={searchRef} className="bg-transparent w-full ml-3 text-base font-medium outline-none placeholder-gray-400 dark:text-white h-full" placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)} />
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-3 no-scrollbar space-y-1">
+                            {favList.length > 0 && (
+                                <div className="mb-4">
+                                    <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Favoris</div>
+                                    {favList.map(c => <CurrencyRow key={c.code} c={c} selectedCode={selectedCode} onSelect={() => { feedback(); onSelect(c.code); onClose(); }} isFav={true} onToggleFav={(e) => { e.stopPropagation(); feedback(); toggleFavorite(c.code); }} />)}
+                                </div>
+                            )}
+                            <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Toutes les devises</div>
+                            {otherList.map(c => <CurrencyRow key={c.code} c={c} selectedCode={selectedCode} onSelect={() => { feedback(); onSelect(c.code); onClose(); }} isFav={false} onToggleFav={(e) => { e.stopPropagation(); feedback(); toggleFavorite(c.code); }} />)}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const CurrencyRow = ({ c, selectedCode, onSelect, isFav, onToggleFav }) => (
+            <button onClick={onSelect} className={`w-full flex items-center p-3 rounded-2xl transition-all active:scale-[0.98] ${selectedCode === c.code ? 'bg-blue-50/80 dark:bg-blue-900/40 ring-1 ring-blue-100 dark:ring-blue-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                <div className="w-10 h-10 rounded-xl bg-white dark:bg-gray-700 shadow-sm flex items-center justify-center border border-gray-100 dark:border-gray-600 overflow-hidden flex-shrink-0">
+                    {c.type === 'crypto' ? <img src={c.iconUrl} alt={c.code} className="w-6 h-6 object-contain" /> : <img src={`https://flagcdn.com/w80/${c.flag}.png`} alt={c.code} className="w-10 h-full object-cover" />}
+                </div>
+                <div className="ml-3 text-left flex-1 min-w-0">
+                    <div className={`text-base font-bold truncate ${selectedCode === c.code ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white'}`}>{c.name}</div>
+                    <div className="text-xs text-gray-400 font-medium">{c.code}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div onClick={onToggleFav} className="p-3 -m-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-full cursor-pointer transition-colors">
+                        <i className={`ph ${isFav ? 'ph-star-fill text-yellow-400' : 'ph-star text-gray-300 dark:text-gray-600'} text-lg`}></i>
+                    </div>
+                </div>
+            </button>
+        );
+
+        // --- About Modal ---
+        const AboutModal = ({ isOpen, onClose }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 fade-in">
+                    <div className="bg-white dark:bg-gray-900 w-full max-w-sm rounded-3xl shadow-xl p-6 relative text-center border border-gray-100 dark:border-gray-800">
+                        <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-white">
+                            <i className="ph ph-x"></i>
+                        </button>
+                        <div className="mb-4 flex justify-center">
+                            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                <i className="ph ph-info text-2xl"></i>
+                            </div>
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">À propos</h3>
+                        <p className="text-gray-600 dark:text-gray-300 text-sm mb-6 leading-relaxed">
+                            Convertisseur développé avec passion. Données BCE & CoinGecko.
+                        </p>
+                        <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+                            <p className="text-xs text-gray-400 mb-2">Une réalisation</p>
+                            <a href="https://imaginative-youtiao-371d08.netlify.app" target="_blank" className="inline-block px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-black text-sm font-semibold rounded-full hover:scale-105 transition-transform">
+                                Condamine Apps
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            // 1. Hooks (Order must be static)
+            const [showSplash, setShowSplash] = useState(true);
+            const [fromCurrency, setFromCurrency] = useState(() => localStorage.getItem('fromCurrency') || null);
+            const [toCurrency, setToCurrency] = useState(() => localStorage.getItem('toCurrency') || 'EUR');
+            const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem('favorites')) || ['USD', 'EUR', 'BTC', 'ETH']);
+            const [amountStr, setAmountStr] = useState(() => localStorage.getItem('amountStr') || "100");
+            const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            const [dateInput, setDateInput] = useState(() => new Date().toLocaleDateString('fr-FR'));
+            const [inputError, setInputError] = useState(false);
+            const [rate, setRate] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const [lastUpdated, setLastUpdated] = useState(null);
+            const [shakeAnim, setShakeAnim] = useState(false);
+
+            const [isFromPickerOpen, setIsFromPickerOpen] = useState(false);
+            const [isToPickerOpen, setIsToPickerOpen] = useState(false);
+            const [isAboutOpen, setIsAboutOpen] = useState(false);
+            
+            const captureRef = useRef(null);
+            const touchStartX = useRef(null);
+
+            // Derived
+            const fromInfo = getCurrencyInfo(fromCurrency);
+            const toInfo = getCurrencyInfo(toCurrency);
+            const bgGradient = fromInfo.color || DEFAULT_COLOR;
+            const accentColor = fromInfo.accent || DEFAULT_ACCENT;
+
+            // Effects
+            useEffect(() => {
+                if (!fromCurrency) {
+                    const lang = navigator.language || 'en-US';
+                    let detected = 'USD';
+                    if (lang.includes('FR') || lang.includes('DE') || lang.includes('IT') || lang.includes('ES')) detected = 'EUR';
+                    else if (lang.includes('GB')) detected = 'GBP';
+                    else if (lang.includes('JP')) detected = 'JPY';
+                    else if (lang.includes('CH')) detected = 'CHF';
+                    else if (lang.includes('CN')) detected = 'CNY';
+                    
+                    setFromCurrency(detected);
+                    if (detected === toCurrency) setToCurrency('USD');
+                }
+            }, []);
+
+            useEffect(() => {
+                let lastX, lastY, lastZ;
+                let lastTime = 0;
+                const threshold = 15;
+                const handleMotion = (e) => {
+                    const current = e.accelerationIncludingGravity;
+                    if(!current) return;
+                    const curTime = new Date().getTime();
+                    if ((curTime - lastTime) > 100) {
+                        const diffTime = curTime - lastTime;
+                        lastTime = curTime;
+                        const speed = Math.abs(current.x + current.y + current.z - lastX - lastY - lastZ) / diffTime * 10000;
+                        if (speed > threshold) {
+                            setAmountStr("0");
+                            setShakeAnim(true);
+                            feedback();
+                            setTimeout(() => setShakeAnim(false), 500);
+                        }
+                        lastX = current.x; lastY = current.y; lastZ = current.z;
+                    }
+                };
+                if (window.DeviceMotionEvent) window.addEventListener('devicemotion', handleMotion, false);
+                return () => window.removeEventListener('devicemotion', handleMotion);
+            }, []);
+
+            useEffect(() => {
+                if(fromCurrency) localStorage.setItem('fromCurrency', fromCurrency);
+                if(toCurrency) localStorage.setItem('toCurrency', toCurrency);
+                localStorage.setItem('amountStr', amountStr);
+                localStorage.setItem('favorites', JSON.stringify(favorites));
+            }, [fromCurrency, toCurrency, amountStr, favorites]);
+
+            useEffect(() => {
+                const fetchRate = async () => {
+                    if (!fromCurrency || !toCurrency) return;
+                    if (fromCurrency === toCurrency) { setRate(1); setLastUpdated(date); return; }
+                    setLoading(true); setError(null); setRate(null);
+                    try {
+                        const isCrypto = fromInfo.type === 'crypto' || toInfo.type === 'crypto';
+                        if (isCrypto) {
+                            const [y, m, d] = date.split('-');
+                            const cgDate = `${d}-${m}-${y}`;
+                            const fetchPriceInUSD = async (info) => {
+                                if (info.type === 'fiat') {
+                                    if (info.code === 'USD') return 1;
+                                    const res = await fetch(`https://api.frankfurter.app/${date}?from=${info.code}&to=USD`);
+                                    return (await res.json()).rates.USD;
+                                } else {
+                                    const res = await fetch(`https://api.coingecko.com/api/v3/coins/${info.coinId}/history?date=${cgDate}&localization=false`);
+                                    if(!res.ok) throw new Error();
+                                    return (await res.json()).market_data.current_price.usd;
+                                }
+                            };
+                            const [p1, p2] = await Promise.all([fetchPriceInUSD(fromInfo), fetchPriceInUSD(toInfo)]);
+                            if(p1 && p2) { setRate(p1/p2); setLastUpdated(date); } else throw new Error();
+                        } else {
+                            const res = await fetch(`https://api.frankfurter.app/${date}?from=${fromCurrency}&to=${toCurrency}`);
+                            if(!res.ok) throw new Error();
+                            const data = await res.json();
+                            setRate(data.rates[toCurrency]); setLastUpdated(data.date);
+                        }
+                    } catch (e) { setError("Données indisponibles"); } finally { setLoading(false); }
+                };
+                const t = setTimeout(() => { if(date && fromCurrency && toCurrency) fetchRate(); }, 400);
+                return () => clearTimeout(t);
+            }, [date, fromCurrency, toCurrency]);
+
+            const calculatedValue = useMemo(() => {
+                const val = parseFloat(amountStr);
+                return (rate === null || isNaN(val)) ? 0 : val * rate;
+            }, [amountStr, rate]);
+
+            // Handlers
+            const toggleFavorite = (code) => setFavorites(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]);
+            const handleSwitch = () => { feedback(); const temp = fromCurrency; setFromCurrency(toCurrency); setToCurrency(temp); };
+            const handleDateInputChange = (e) => {
+                let val = e.target.value;
+                if (val.length > dateInput.length && (val.length === 2 || val.length === 5)) val += '/';
+                setDateInput(val); setInputError(false);
+            };
+            const validateAndSetDate = () => {
+                const match = dateInput.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+                if (match) {
+                    const d = new Date(match[3], match[2]-1, match[1]);
+                    if(d <= new Date()) { setDate(d.toISOString().split('T')[0]); setDateInput(d.toLocaleDateString('fr-FR')); return; }
+                }
+                setInputError(true); feedback();
+                setTimeout(() => { setDateInput(new Date(date).toLocaleDateString('fr-FR')); setInputError(false); }, 500);
+            };
+            const handleTouchEnd = (e) => {
+                if (!touchStartX.current) return;
+                const diff = touchStartX.current - e.changedTouches[0].clientX;
+                if (Math.abs(diff) > 50) {
+                    feedback();
+                    const idx = favorites.indexOf(toCurrency);
+                    let next = diff > 0 ? (idx + 1) : (idx - 1 + favorites.length);
+                    if (favorites.length > 0) setToCurrency(favorites[next % favorites.length]);
+                }
+                touchStartX.current = null;
+            };
+            const handleScreenshot = async () => {
+                feedback();
+                if (!captureRef.current) return;
+                await new Promise(r => setTimeout(r, 100));
+                const canvas = await html2canvas(captureRef.current, { scale: 3, backgroundColor: null, logging: false, useCORS: true, onclone: (doc) => {
+                    doc.querySelectorAll('input').forEach(i => i.setAttribute('value', i.value));
+                }});
+                canvas.toBlob(blob => {
+                    const link = document.createElement('a'); link.download = 'convert.png';
+                    link.href = URL.createObjectURL(blob); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                });
+            };
+            const handleShare = async () => {
+                feedback();
+                const text = `${amountStr} ${fromCurrency} = ${calculatedValue.toFixed(2)} ${toCurrency}`;
+                if (navigator.share) navigator.share({ title: 'Conversion', text }).catch(()=>{});
+                else { try { await navigator.clipboard.writeText(text); alert('Copié'); } catch(e){} }
+            };
+            const getResultFontSize = () => {
+                const resultText = formatCurrency(calculatedValue, toCurrency);
+                if (resultText.length > 14) return 'text-2xl sm:text-3xl';
+                if (resultText.length > 10) return 'text-3xl sm:text-4xl';
+                return 'text-4xl sm:text-5xl';
+            };
+
+            const presets = ["1", "10", "50", "100", "1000"];
+
+            // Render
+            // Only blocking return at the very end
+            if (!fromCurrency) return null; 
+
+            return (
+                <>
+                    {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
+                    <div className={`absolute inset-0 w-full h-[100dvh] bg-gradient-to-br ${bgGradient} transition-colors duration-1000 flex flex-col justify-end sm:justify-center overflow-hidden`}>
+                        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+                            <div className="absolute top-[-10%] left-[-10%] w-[80%] h-[60%] bg-white/20 dark:bg-white/5 rounded-full blur-[100px] mix-blend-overlay animate-blob"></div>
+                            <div className="absolute bottom-[-10%] right-[-10%] w-[80%] h-[60%] bg-white/20 dark:bg-white/5 rounded-full blur-[100px] mix-blend-overlay animate-blob animation-delay-4000"></div>
+                        </div>
+
+                        <CurrencyPicker isOpen={isFromPickerOpen} onClose={() => setIsFromPickerOpen(false)} onSelect={setFromCurrency} selectedCode={fromCurrency} title="Départ" favorites={favorites} toggleFavorite={toggleFavorite} />
+                        <CurrencyPicker isOpen={isToPickerOpen} onClose={() => setIsToPickerOpen(false)} onSelect={setToCurrency} selectedCode={toCurrency} title="Arrivée" favorites={favorites} toggleFavorite={toggleFavorite} />
+                        <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
+
+                        <div className="absolute top-[env(safe-area-inset-top)] sm:top-6 right-4 sm:right-6 flex gap-3 z-40 mt-4 sm:mt-0">
+                            <button onClick={handleShare} className="p-3 text-gray-600 dark:text-gray-300 bg-white/40 dark:bg-black/40 hover:bg-white dark:hover:bg-gray-800 rounded-full shadow-sm backdrop-blur-md transition-all"><i className="ph ph-share-network text-lg"></i></button>
+                            <button onClick={handleScreenshot} className="p-3 text-gray-600 dark:text-gray-300 bg-white/40 dark:bg-black/40 hover:bg-white dark:hover:bg-gray-800 rounded-full shadow-sm backdrop-blur-md transition-all"><i className="ph ph-camera text-lg"></i></button>
+                            <button onClick={() => setIsAboutOpen(true)} className="p-3 text-gray-600 dark:text-gray-300 bg-white/40 dark:bg-black/40 hover:bg-white dark:hover:bg-gray-800 rounded-full shadow-sm backdrop-blur-md transition-all"><i className="ph ph-info text-lg"></i></button>
+                        </div>
+
+                        <div className="w-full max-w-md px-4 sm:px-4 pb-safe sm:pb-0 z-10 mx-auto">
+                            <div ref={captureRef} className={`p-4 sm:p-8 -m-4 sm:-m-8 rounded-[3rem] transition-transform ${shakeAnim ? 'shake-anim' : ''}`}>
+                                <div className="mb-4 sm:mb-8 text-center pt-8 sm:pt-0">
+                                    <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight drop-shadow-sm">Convertisseur</h1>
+                                    <p className={`mt-2 font-medium flex items-center justify-center gap-2 ${accentColor} bg-white/40 dark:bg-black/40 inline-flex px-4 py-1 rounded-full backdrop-blur-md shadow-sm text-sm border border-white/20`}>
+                                        {fromCurrency} <i className="ph ph-arrow-right"></i> {toCurrency}
+                                    </p>
+                                </div>
+
+                                <div className="glass-panel w-full rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-visible transition-all duration-300 relative border-b-0 sm:border-b dark:border-white/10">
+                                    <div className="p-5 sm:p-6 pb-2 relative z-10">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">Je convertis</label>
+                                            <button onClick={() => { feedback(); setIsFromPickerOpen(true); }} className="flex items-center gap-2 px-3 py-1.5 bg-white/60 dark:bg-black/40 hover:bg-white dark:hover:bg-gray-800 rounded-full shadow-sm border border-white/50 dark:border-white/10 active:scale-95 transition-all">
+                                                {fromInfo.type === 'crypto' ? <img src={fromInfo.iconUrl} className="w-5 h-5" /> : <img src={`https://flagcdn.com/w40/${fromInfo.flag}.png`} className="w-5 h-3.5 rounded-[2px] shadow-sm object-cover" />}
+                                                <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{fromInfo.code}</span>
+                                                <i className="ph ph-caret-down text-gray-400"></i>
+                                            </button>
+                                        </div>
+                                        <div className="group bg-white/50 dark:bg-black/30 rounded-2xl focus-within:bg-white dark:focus-within:bg-black/50 focus-within:ring-2 focus-within:ring-blue-500/20 hover:bg-white/70 dark:hover:bg-black/40 shadow-sm flex items-center px-4 h-20 sm:h-24 cursor-text transition-all" onClick={() => document.getElementById('amountInput').focus()}>
+                                            <span className={`text-3xl sm:text-4xl font-light select-none leading-none ${accentColor}`}>{fromInfo.symbol}</span>
+                                            <input id="amountInput" type="number" inputMode="decimal" value={amountStr} onChange={(e) => setAmountStr(e.target.value)} className="block w-full ml-3 h-full py-0 bg-transparent text-gray-900 dark:text-white text-4xl sm:text-5xl font-bold tracking-tight appearance-none placeholder-gray-300 dark:placeholder-gray-600 leading-none" placeholder="0" />
+                                        </div>
+                                        <div className="flex gap-2 mt-3 overflow-x-auto no-scrollbar pb-2 mask-linear">
+                                            {presets.map(val => (
+                                                <button key={val} onClick={() => { feedback(); setAmountStr(val); }} className="h-10 px-5 bg-white/70 dark:bg-gray-800/50 rounded-full text-sm font-bold text-gray-600 dark:text-gray-300 shadow-sm border border-white/50 dark:border-white/10 active:scale-95 hover:bg-white dark:hover:bg-gray-800 transition-all flex items-center justify-center">+{val}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="relative h-12 w-full my-0 z-30 flex items-center justify-between px-5 sm:px-6">
+                                        <button onClick={handleSwitch} className="bg-white dark:bg-gray-800 p-3 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 active:scale-90 transition-all group flex items-center justify-center">
+                                            <i className="ph ph-arrows-down-up text-xl group-active:rotate-180 transition-transform duration-300"></i>
+                                        </button>
+                                        <div className={`relative flex items-center bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-full shadow-md border transition-all ${inputError ? 'border-red-400 shake-anim bg-red-50 dark:bg-red-900/20' : 'border-white/60 dark:border-gray-600'} h-10 px-4`}>
+                                            <div className={`${accentColor} flex items-center`}><i className="ph ph-calendar-blank text-lg"></i></div>
+                                            <input type="text" value={dateInput} onChange={handleDateInputChange} onBlur={validateAndSetDate} onKeyDown={(e) => e.key === 'Enter' && e.target.blur()} className="w-24 h-full py-0 bg-transparent text-sm font-bold text-gray-600 dark:text-gray-300 text-center focus:outline-none ml-1" inputMode="numeric" />
+                                        </div>
+                                        <div className="w-12"></div>
+                                    </div>
+
+                                    <div className="p-5 sm:p-6 pt-6 bg-white/40 dark:bg-black/40 backdrop-blur-md rounded-b-none sm:rounded-b-[2.5rem] relative z-20 border-t border-white/20 dark:border-white/5 pb-8 sm:pb-6 cursor-grab active:cursor-grabbing" onTouchStart={(e) => touchStartX.current = e.touches[0].clientX} onTouchEnd={handleTouchEnd}>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">J'obtiens</label>
+                                            <button onClick={() => { feedback(); setIsToPickerOpen(true); }} className="flex items-center gap-2 px-3 py-1.5 bg-white/60 dark:bg-black/40 hover:bg-white dark:hover:bg-gray-800 rounded-full shadow-sm border border-white/50 dark:border-white/10 active:scale-95 transition-all">
+                                                {toInfo.type === 'crypto' ? <img src={toInfo.iconUrl} className="w-5 h-5" /> : <img src={`https://flagcdn.com/w40/${toInfo.flag}.png`} className="w-5 h-3.5 rounded-[2px] shadow-sm object-cover" />}
+                                                <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{toInfo.code}</span>
+                                                <i className="ph ph-caret-down text-gray-400"></i>
+                                            </button>
+                                        </div>
+                                        
+                                        <div className="flex items-baseline justify-between min-h-[60px] sm:min-h-[70px]">
+                                            {loading ? (
+                                                <div className="flex items-center gap-3 mt-2">
+                                                    <div className={`w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin ${accentColor}`}></div>
+                                                    <span className="text-gray-400 text-lg font-medium">Actualisation...</span>
+                                                </div>
+                                            ) : error ? (
+                                                <div className="text-red-500 text-sm font-medium bg-red-50/80 dark:bg-red-900/30 p-3 rounded-xl w-full border border-red-100 dark:border-red-800 mt-2">{error}</div>
+                                            ) : (
+                                                <div className="flex flex-col w-full">
+                                                    <div className="flex items-baseline gap-2 mt-1 flex-wrap">
+                                                        <span className={`${getResultFontSize()} font-bold text-gray-900 dark:text-white tracking-tighter break-all transition-all`}>
+                                                            {formatCurrency(calculatedValue, toCurrency).replace(toInfo.symbol, '').replace(toCurrency, '').trim()}
+                                                        </span>
+                                                        <span className={`text-2xl sm:text-3xl font-medium ${accentColor} opacity-80`}>{toInfo.symbol}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {!loading && !error && rate && (
+                                            <div className="mt-4 pt-4 border-t border-gray-200/30 dark:border-gray-700/30 flex flex-col animate-pulse-once">
+                                                <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-2">
+                                                    <span className="flex items-center gap-2 bg-white/50 dark:bg-black/30 px-3 py-1.5 rounded-lg h-8 border border-white/30 dark:border-white/10 shadow-sm">
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300 leading-none flex items-center h-full text-xs sm:text-sm">1 {fromInfo.symbol}</span>
+                                                        <i className="ph ph-arrow-right text-gray-400"></i>
+                                                        <span className="font-bold text-gray-700 dark:text-gray-300 leading-none flex items-center h-full text-xs sm:text-sm">
+                                                            {rate > 0.01 ? rate.toFixed(4) : rate.toPrecision(4)} {toInfo.symbol}
+                                                        </span>
+                                                    </span>
+                                                    <span className="text-[10px] font-bold uppercase tracking-wide bg-white/30 dark:bg-black/30 px-2 py-1 rounded-md">
+                                                        {fromInfo.type === 'crypto' || toInfo.type === 'crypto' ? 'CoinGecko' : 'BCE'}
+                                                    </span>
+                                                </div>
+                                                <Sparkline currencyFrom={fromCurrency} currencyTo={toCurrency} currentRate={rate} />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="mt-8 text-center opacity-60 flex flex-col items-center">
+                                    <p className="text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 font-bold mb-1">
+                                        Designé par <a href="https://imaginative-youtiao-371d08.netlify.app" target="_blank" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Condamine Apps</a>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            );
+        };
+
+        const formatCurrency = (val, code) => {
+            if (isNaN(val)) return "0,00";
+            try { return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: code }).format(val); } catch (e) { return val.toFixed(2); }
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
