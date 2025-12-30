@@ -80,20 +80,18 @@
         input:focus { outline: none; }
         input { -webkit-appearance: none; appearance: none; }
 
-        /* Glassmorphism Light/Dark */
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.85);
+        /* iOS Card Style - Clean white card in light, dark glass in dark */
+        .ios-card {
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 8px 32px rgba(0, 0, 0, 0.08);
+        }
+        .dark .ios-card {
+            background: rgba(28, 28, 30, 0.85);
             backdrop-filter: blur(25px);
             -webkit-backdrop-filter: blur(25px);
-            border: 1px solid rgba(255, 255, 255, 0.6);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
-        }
-        @media (prefers-color-scheme: dark) {
-            .glass-panel {
-                background: rgba(30, 30, 30, 0.6);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            }
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
 
         .fade-in { animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
@@ -670,17 +668,16 @@
                 { value: 'system', icon: 'ph-device-mobile', label: 'Auto' },
                 { value: 'dark', icon: 'ph-moon', label: 'Sombre' },
             ];
-            const activeIndex = options.findIndex(o => o.value === theme);
 
             return (
-                <div className="flex items-center bg-white/60 dark:bg-black/60 backdrop-blur-xl rounded-full p-1 shadow-sm border border-white/30 dark:border-white/10 h-9">
-                    {options.map((opt, idx) => (
+                <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-full p-1 shadow-sm border border-gray-200 dark:border-gray-700 h-9">
+                    {options.map((opt) => (
                         <button
                             key={opt.value}
                             onClick={() => setTheme(opt.value)}
                             className={`relative flex items-center justify-center w-9 h-7 rounded-full transition-all duration-200 ${
                                 theme === opt.value
-                                    ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white'
+                                    ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-900 dark:text-white'
                                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                             }`}
                             title={opt.label}
@@ -791,21 +788,34 @@
                     try {
                         const isCrypto = fromInfo.type === 'crypto' || toInfo.type === 'crypto';
                         if (isCrypto) {
-                            const [y, m, d] = date.split('-');
-                            const cgDate = `${d}-${m}-${y}`;
+                            const today = new Date().toISOString().split('T')[0];
+                            const isToday = date === today;
+
                             const fetchPriceInUSD = async (info) => {
                                 if (info.type === 'fiat') {
                                     if (info.code === 'USD') return 1;
                                     const res = await fetch(`https://api.frankfurter.app/${date}?from=${info.code}&to=USD`);
+                                    if (!res.ok) throw new Error('Frankfurter API error');
                                     return (await res.json()).rates.USD;
                                 } else {
-                                    const res = await fetch(`https://api.coingecko.com/api/v3/coins/${info.coinId}/history?date=${cgDate}&localization=false`);
-                                    if(!res.ok) throw new Error();
-                                    return (await res.json()).market_data.current_price.usd;
+                                    // Use simple price API for today (more reliable), historical for past dates
+                                    if (isToday) {
+                                        const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${info.coinId}&vs_currencies=usd`);
+                                        if (!res.ok) throw new Error('CoinGecko API error');
+                                        const data = await res.json();
+                                        return data[info.coinId]?.usd;
+                                    } else {
+                                        const [y, m, d] = date.split('-');
+                                        const cgDate = `${d}-${m}-${y}`;
+                                        const res = await fetch(`https://api.coingecko.com/api/v3/coins/${info.coinId}/history?date=${cgDate}&localization=false`);
+                                        if (!res.ok) throw new Error('CoinGecko history API error');
+                                        const data = await res.json();
+                                        return data.market_data?.current_price?.usd;
+                                    }
                                 }
                             };
                             const [p1, p2] = await Promise.all([fetchPriceInUSD(fromInfo), fetchPriceInUSD(toInfo)]);
-                            if(p1 && p2) { setRate(p1/p2); setLastUpdated(date); } else throw new Error();
+                            if (p1 && p2) { setRate(p1/p2); setLastUpdated(date); } else throw new Error('Price data unavailable');
                         } else {
                             const res = await fetch(`https://api.frankfurter.app/${date}?from=${fromCurrency}&to=${toCurrency}`);
                             if(!res.ok) throw new Error();
@@ -888,7 +898,7 @@
                         <div className="absolute top-0 left-0 right-0 z-40 pt-[max(env(safe-area-inset-top),12px)] px-4 sm:px-6 pb-3">
                             <div className="flex items-center justify-between">
                                 {/* Logo left */}
-                                <div className="flex items-center gap-2 bg-white/50 dark:bg-black/50 backdrop-blur-xl rounded-full pl-1.5 pr-3 h-9 shadow-sm border border-white/30 dark:border-white/10">
+                                <div className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-full pl-1.5 pr-3 h-9 shadow-sm border border-gray-200 dark:border-gray-800">
                                     <div className="w-6 h-6 bg-blue-600 dark:bg-blue-500 rounded-md flex items-center justify-center text-white flex-shrink-0">
                                         <i className="ph ph-arrows-left-right text-sm"></i>
                                     </div>
@@ -898,10 +908,10 @@
                                 {/* Actions right - iOS 44pt touch targets */}
                                 <div className="flex items-center gap-2">
                                     <ThemeToggle theme={theme} setTheme={setTheme} />
-                                    <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 bg-white/50 dark:bg-black/50 hover:bg-white/80 dark:hover:bg-black/80 rounded-full shadow-sm backdrop-blur-xl border border-white/30 dark:border-white/10 transition-all active:scale-95">
+                                    <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-full shadow-sm border border-gray-200 dark:border-gray-800 transition-all active:scale-95">
                                         <i className="ph ph-share-network text-[17px]"></i>
                                     </button>
-                                    <button onClick={() => { feedback(); setIsAboutOpen(true); }} className="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 bg-white/50 dark:bg-black/50 hover:bg-white/80 dark:hover:bg-black/80 rounded-full shadow-sm backdrop-blur-xl border border-white/30 dark:border-white/10 transition-all active:scale-95">
+                                    <button onClick={() => { feedback(); setIsAboutOpen(true); }} className="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-full shadow-sm border border-gray-200 dark:border-gray-800 transition-all active:scale-95">
                                         <i className="ph ph-info text-[17px]"></i>
                                     </button>
                                 </div>
@@ -911,17 +921,17 @@
                         {/* Main content - proper iOS spacing */}
                         <div className="w-full max-w-md px-4 sm:px-6 pt-16 pb-6 z-10 mx-auto flex flex-col min-h-[100dvh] sm:min-h-0 sm:py-0">
                             <div className="flex-1 flex flex-col justify-center">
-                                <div ref={captureRef} className="glass-panel w-full rounded-[28px] shadow-2xl overflow-hidden transition-all duration-300 relative dark:border dark:border-white/10">
+                                <div ref={captureRef} className="ios-card w-full rounded-[28px] overflow-hidden transition-all duration-300 relative">
                                     <div className="p-5 sm:p-6 pb-2 relative z-10">
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">Je convertis</label>
-                                            <button onClick={() => { feedback(); setIsFromPickerOpen(true); }} className="flex items-center gap-2 px-3 py-1.5 bg-white/60 dark:bg-black/40 hover:bg-white dark:hover:bg-gray-800 rounded-full shadow-sm border border-white/50 dark:border-white/10 active:scale-95 transition-all">
+                                            <button onClick={() => { feedback(); setIsFromPickerOpen(true); }} className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full border border-gray-200 dark:border-gray-700 active:scale-95 transition-all">
                                                 {fromInfo.type === 'crypto' ? <img src={fromInfo.iconUrl} className="w-5 h-5" /> : <img src={`https://flagcdn.com/w40/${fromInfo.flag}.png`} className="w-5 h-3.5 rounded-[2px] shadow-sm object-cover" />}
                                                 <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{fromInfo.code}</span>
                                                 <i className="ph ph-caret-down text-gray-400"></i>
                                             </button>
                                         </div>
-                                        <div className="group bg-white/50 dark:bg-black/30 rounded-2xl focus-within:bg-white dark:focus-within:bg-black/50 focus-within:ring-2 focus-within:ring-blue-500/20 hover:bg-white/70 dark:hover:bg-black/40 shadow-sm flex items-center px-4 h-20 sm:h-24 transition-all">
+                                        <div className="group bg-gray-50 dark:bg-gray-800/50 rounded-2xl focus-within:bg-gray-100 dark:focus-within:bg-gray-800 focus-within:ring-2 focus-within:ring-blue-500/20 hover:bg-gray-100 dark:hover:bg-gray-800/70 flex items-center px-4 h-20 sm:h-24 transition-all border border-gray-100 dark:border-gray-700/50">
                                             <span className={`text-3xl sm:text-4xl font-light select-none leading-none ${accentColor}`}>{fromInfo.symbol}</span>
                                             <input id="amountInput" type="number" inputMode="decimal" value={amountStr} onChange={(e) => setAmountStr(e.target.value)} className="block w-full ml-3 h-full py-0 bg-transparent text-gray-900 dark:text-white text-4xl sm:text-5xl font-bold tracking-tight appearance-none placeholder-gray-300 dark:placeholder-gray-600 leading-none" placeholder="0" />
                                         </div>
@@ -934,7 +944,7 @@
                                         </button>
                                         <button
                                             onClick={() => { feedback(); setIsDatePickerOpen(true); }}
-                                            className="flex items-center gap-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-full shadow-md border border-white/60 dark:border-gray-600 h-10 px-4 hover:bg-white dark:hover:bg-gray-800 active:scale-95 transition-all"
+                                            className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-full shadow-sm border border-gray-200 dark:border-gray-700 h-10 px-4 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95 transition-all"
                                         >
                                             <i className={`ph ph-calendar-blank text-[17px] ${accentColor}`}></i>
                                             <span className="text-[13px] font-bold text-gray-600 dark:text-gray-300">{formatDateForDisplay(date)}</span>
@@ -944,10 +954,10 @@
                                     </div>
 
                                     {/* Result section */}
-                                    <div className="p-5 sm:p-6 pt-5 bg-white/40 dark:bg-black/40 backdrop-blur-md relative z-20 border-t border-white/20 dark:border-white/5">
+                                    <div className="p-5 sm:p-6 pt-5 bg-gray-50 dark:bg-gray-900/50 relative z-20 border-t border-gray-100 dark:border-gray-800">
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">J'obtiens</label>
-                                            <button onClick={() => { feedback(); setIsToPickerOpen(true); }} className="flex items-center gap-2 px-3 py-1.5 bg-white/60 dark:bg-black/40 hover:bg-white dark:hover:bg-gray-800 rounded-full shadow-sm border border-white/50 dark:border-white/10 active:scale-95 transition-all">
+                                            <button onClick={() => { feedback(); setIsToPickerOpen(true); }} className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-full border border-gray-200 dark:border-gray-700 active:scale-95 transition-all">
                                                 {toInfo.type === 'crypto' ? <img src={toInfo.iconUrl} className="w-5 h-5" /> : <img src={`https://flagcdn.com/w40/${toInfo.flag}.png`} className="w-5 h-3.5 rounded-[2px] shadow-sm object-cover" />}
                                                 <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{toInfo.code}</span>
                                                 <i className="ph ph-caret-down text-gray-400"></i>
@@ -975,16 +985,16 @@
                                         </div>
 
                                         {!loading && !error && rate && (
-                                            <div className="mt-4 pt-4 border-t border-gray-200/30 dark:border-gray-700/30 flex flex-col animate-pulse-once">
+                                            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700/50 flex flex-col animate-pulse-once">
                                                 <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-2">
-                                                    <span className="flex items-center gap-2 bg-white/50 dark:bg-black/30 px-3 py-1.5 rounded-lg h-8 border border-white/30 dark:border-white/10 shadow-sm">
+                                                    <span className="flex items-center gap-2 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg h-8 border border-gray-200 dark:border-gray-700 shadow-sm">
                                                         <span className="font-bold text-gray-700 dark:text-gray-300 leading-none flex items-center h-full text-xs sm:text-sm">1 {fromInfo.symbol}</span>
                                                         <i className="ph ph-arrow-right text-gray-400"></i>
                                                         <span className="font-bold text-gray-700 dark:text-gray-300 leading-none flex items-center h-full text-xs sm:text-sm">
                                                             {rate > 0.01 ? rate.toFixed(4) : rate.toPrecision(4)} {toInfo.symbol}
                                                         </span>
                                                     </span>
-                                                    <span className="text-[10px] font-bold uppercase tracking-wide bg-white/30 dark:bg-black/30 px-2 py-1 rounded-md">
+                                                    <span className="text-[10px] font-bold uppercase tracking-wide bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-2 py-1 rounded-md border border-gray-200 dark:border-gray-700">
                                                         {fromInfo.type === 'crypto' || toInfo.type === 'crypto' ? 'CoinGecko' : 'BCE'}
                                                     </span>
                                                 </div>
