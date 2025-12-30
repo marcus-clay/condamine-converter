@@ -384,7 +384,13 @@
             lastMonth.setMonth(lastMonth.getMonth() - 1);
 
             const formatDateDisplay = (d) => d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-            const formatDateISO = (d) => d.toISOString().split('T')[0];
+            // Use local date to avoid timezone shift (toISOString converts to UTC which can change the day)
+            const formatDateISO = (d) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
 
             const presets = [
                 { label: "Aujourd'hui", date: today, icon: 'ph-calendar-check' },
