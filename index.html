@@ -119,8 +119,10 @@
         const { useState, useEffect, useMemo, useRef } = React;
 
         // --- Utils ---
-        // Haptic/audio feedback disabled to prevent mobile UI issues
-        const feedback = () => {};
+        // Haptic feedback on tap (no audio to avoid annoyance)
+        const feedback = () => {
+            if (navigator.vibrate) navigator.vibrate(5);
+        };
 
         // --- Data ---
         const CURRENCIES = [
