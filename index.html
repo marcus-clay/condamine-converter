@@ -295,7 +295,7 @@
                         <path d={pathD} fill="none" strokeWidth="2" className={colorClass} strokeLinecap="round" strokeLinejoin="round" />
                         <circle cx={width} cy={height - ((points[points.length-1] - min) / range) * height} r="3" className={isUp ? 'fill-green-500' : 'fill-red-500'} />
                     </svg>
-                    <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-1 mb-4">
+                    <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-1">
                         <span>Il y a 7 jours</span>
                         <span>Aujourd'hui</span>
                     </div>
@@ -954,7 +954,7 @@
                                     </div>
 
                                     {/* Result section */}
-                                    <div className="p-5 sm:p-6 pt-5 bg-gray-50 dark:bg-gray-900/50 relative z-20 border-t border-gray-100 dark:border-gray-800">
+                                    <div className="p-5 sm:p-6 pt-5 pb-6 sm:pb-8 bg-gray-50 dark:bg-gray-900/50 relative z-20 border-t border-gray-100 dark:border-gray-800">
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">J'obtiens</label>
                                             <button onClick={() => { feedback(); setIsToPickerOpen(true); }} className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-full border border-gray-200 dark:border-gray-700 active:scale-95 transition-all">
