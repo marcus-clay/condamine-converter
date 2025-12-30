@@ -207,7 +207,7 @@
                         <path d={pathD} fill="none" strokeWidth="2" className={colorClass} strokeLinecap="round" strokeLinejoin="round" />
                         <circle cx={width} cy={height - ((points[points.length-1] - min) / range) * height} r="3" className={isUp ? 'fill-green-500' : 'fill-red-500'} />
                     </svg>
-                    <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-1">
+                    <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-1 mb-4">
                         <span>Il y a 7 jours</span>
                         <span>Aujourd'hui</span>
                     </div>
@@ -666,10 +666,10 @@
             const toggleFavorite = (code) => setFavorites(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]);
             const handleSwitch = () => { feedback(); const temp = fromCurrency; setFromCurrency(toCurrency); setToCurrency(temp); };
 
-            // Format date for display
+            // Format date for display - full date with day, month, year
             const formatDateForDisplay = (isoDate) => {
                 const d = new Date(isoDate);
-                return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+                return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
             };
             const handleScreenshot = async () => {
                 feedback();
@@ -722,7 +722,7 @@
                                     <div className="w-6 h-6 bg-blue-600 dark:bg-blue-500 rounded-md flex items-center justify-center text-white flex-shrink-0">
                                         <i className="ph ph-arrows-left-right text-sm"></i>
                                     </div>
-                                    <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-200 tracking-tight">Condamine</span>
+                                    <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-200 tracking-tight">Condamine Converter</span>
                                 </div>
 
                                 {/* Actions right - iOS 44pt touch targets */}
@@ -757,7 +757,7 @@
                                     </div>
 
                                     {/* Swap button row */}
-                                    <div className="relative h-14 w-full my-0 z-30 flex items-center justify-between px-5 sm:px-6">
+                                    <div className="relative h-14 w-full my-4 z-30 flex items-center justify-between px-5 sm:px-6">
                                         <button onClick={handleSwitch} className="w-11 h-11 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 active:scale-90 transition-all group flex items-center justify-center flex-shrink-0">
                                             <i className="ph ph-arrows-down-up text-xl group-active:rotate-180 transition-transform duration-300"></i>
                                         </button>
