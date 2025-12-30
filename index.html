@@ -26,6 +26,17 @@
                     fontFamily: { sans: ['Inter', 'sans-serif'] },
                     colors: {
                         dark: { bg: '#050505', panel: 'rgba(20, 20, 20, 0.7)' }
+                    },
+                    animation: {
+                        'blob': 'blob 12s ease-in-out infinite',
+                        'bounce-slow': 'bounce 2s ease-in-out infinite',
+                        'pulse-once': 'pulse 0.5s ease-out'
+                    },
+                    keyframes: {
+                        blob: {
+                            '0%, 100%': { transform: 'translateY(0) scale(1)' },
+                            '50%': { transform: 'translateY(-10px) scale(1.02)' }
+                        }
                     }
                 }
             }
@@ -90,12 +101,34 @@
         .slide-up { animation: slideUp 0.4s cubic-bezier(0.19, 1, 0.22, 1); }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
-        .shake-anim { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        .shake-anim {
+            animation: shake 0.3s ease-out;
+            will-change: transform;
+        }
         @keyframes shake {
-            10%, 90% { transform: translate3d(-1px, 0, 0); }
-            20%, 80% { transform: translate3d(2px, 0, 0); }
-            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-            40%, 60% { transform: translate3d(4px, 0, 0); }
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px); }
+            75% { transform: translateX(3px); }
+        }
+
+        /* Animation delay utility */
+        .animation-delay-4000 {
+            animation-delay: 4s;
+        }
+
+        /* GPU acceleration for heavy animations */
+        .gpu-accelerated {
+            transform: translateZ(0);
+            backface-visibility: hidden;
+        }
+
+        /* Respect reduced motion preferences */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
         }
     </style>
 </head>
@@ -325,6 +358,7 @@
             
             const captureRef = useRef(null);
             const touchStartX = useRef(null);
+            const lastSwipeTime = useRef(0);
 
             // Derived
             const fromInfo = getCurrencyInfo(fromCurrency);
@@ -348,29 +382,12 @@
                 }
             }, []);
 
+            // Device motion shake detection - disabled to prevent UI vibration issues on mobile
+            // The accelerometer-based shake detection was causing the interface to vibrate
+            // and become unresponsive on mobile browsers due to overly sensitive motion detection
             useEffect(() => {
-                let lastX, lastY, lastZ;
-                let lastTime = 0;
-                const threshold = 15;
-                const handleMotion = (e) => {
-                    const current = e.accelerationIncludingGravity;
-                    if(!current) return;
-                    const curTime = new Date().getTime();
-                    if ((curTime - lastTime) > 100) {
-                        const diffTime = curTime - lastTime;
-                        lastTime = curTime;
-                        const speed = Math.abs(current.x + current.y + current.z - lastX - lastY - lastZ) / diffTime * 10000;
-                        if (speed > threshold) {
-                            setAmountStr("0");
-                            setShakeAnim(true);
-                            feedback();
-                            setTimeout(() => setShakeAnim(false), 500);
-                        }
-                        lastX = current.x; lastY = current.y; lastZ = current.z;
-                    }
-                };
-                if (window.DeviceMotionEvent) window.addEventListener('devicemotion', handleMotion, false);
-                return () => window.removeEventListener('devicemotion', handleMotion);
+                // Shake-to-clear feature disabled for stability
+                // Users can manually clear the input by selecting a preset or typing
             }, []);
 
             useEffect(() => {
@@ -439,12 +456,19 @@
             };
             const handleTouchEnd = (e) => {
                 if (!touchStartX.current) return;
+                const now = Date.now();
+                // Debounce swipes - prevent rapid consecutive swipes
+                if (now - lastSwipeTime.current < 300) {
+                    touchStartX.current = null;
+                    return;
+                }
                 const diff = touchStartX.current - e.changedTouches[0].clientX;
-                if (Math.abs(diff) > 50) {
+                if (Math.abs(diff) > 50 && favorites.length > 0) {
+                    lastSwipeTime.current = now;
                     feedback();
                     const idx = favorites.indexOf(toCurrency);
                     let next = diff > 0 ? (idx + 1) : (idx - 1 + favorites.length);
-                    if (favorites.length > 0) setToCurrency(favorites[next % favorites.length]);
+                    setToCurrency(favorites[next % favorites.length]);
                 }
                 touchStartX.current = null;
             };
@@ -482,10 +506,10 @@
             return (
                 <>
                     {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
-                    <div className={`absolute inset-0 w-full h-[100dvh] bg-gradient-to-br ${bgGradient} transition-colors duration-1000 flex flex-col justify-end sm:justify-center overflow-hidden`}>
+                    <div className={`absolute inset-0 w-full h-[100dvh] bg-gradient-to-br ${bgGradient} transition-colors duration-300 flex flex-col justify-end sm:justify-center overflow-hidden`}>
                         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                            <div className="absolute top-[-10%] left-[-10%] w-[80%] h-[60%] bg-white/20 dark:bg-white/5 rounded-full blur-[100px] mix-blend-overlay animate-blob"></div>
-                            <div className="absolute bottom-[-10%] right-[-10%] w-[80%] h-[60%] bg-white/20 dark:bg-white/5 rounded-full blur-[100px] mix-blend-overlay animate-blob animation-delay-4000"></div>
+                            <div className="absolute top-[-10%] left-[-10%] w-[80%] h-[60%] bg-white/20 dark:bg-white/5 rounded-full blur-[100px] mix-blend-overlay animate-blob gpu-accelerated"></div>
+                            <div className="absolute bottom-[-10%] right-[-10%] w-[80%] h-[60%] bg-white/20 dark:bg-white/5 rounded-full blur-[100px] mix-blend-overlay animate-blob animation-delay-4000 gpu-accelerated"></div>
                         </div>
 
                         <CurrencyPicker isOpen={isFromPickerOpen} onClose={() => setIsFromPickerOpen(false)} onSelect={setFromCurrency} selectedCode={fromCurrency} title="Départ" favorites={favorites} toggleFavorite={toggleFavorite} />
