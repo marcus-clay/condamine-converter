@@ -360,17 +360,84 @@
 
             const handleInputChange = (e) => {
                 let val = e.target.value;
-                // Auto-format: add / after day and month
+                // Only keep digits and slashes
+                val = val.replace(/[^\d\/]/g, '');
+
+                // Smart auto-formatting based on input
                 const digits = val.replace(/\D/g, '');
-                if (digits.length >= 2 && digits.length < 4) {
-                    val = digits.slice(0, 2) + '/' + digits.slice(2);
-                } else if (digits.length >= 4) {
-                    val = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4, 8);
+
+                // Build formatted string intelligently
+                if (digits.length > 0) {
+                    let formatted = '';
+                    let i = 0;
+
+                    // Day part (1-2 digits)
+                    if (digits.length >= 1) {
+                        const firstDigit = parseInt(digits[0], 10);
+                        if (firstDigit > 3 || digits.length >= 2) {
+                            // Single digit day (4-9) or we have 2+ digits
+                            if (firstDigit > 3) {
+                                formatted = '0' + digits[0];
+                                i = 1;
+                            } else if (digits.length >= 2) {
+                                const twoDigits = parseInt(digits.slice(0, 2), 10);
+                                if (twoDigits > 31) {
+                                    formatted = '0' + digits[0];
+                                    i = 1;
+                                } else {
+                                    formatted = digits.slice(0, 2);
+                                    i = 2;
+                                }
+                            }
+                        } else {
+                            formatted = digits[0];
+                            i = 1;
+                        }
+                    }
+
+                    // Add slash after day if we have more digits
+                    if (i < digits.length && formatted.length === 2) {
+                        formatted += '/';
+
+                        // Month part (1-2 digits)
+                        const monthStart = i;
+                        if (digits.length > monthStart) {
+                            const firstMonthDigit = parseInt(digits[monthStart], 10);
+                            if (firstMonthDigit > 1 || digits.length > monthStart + 1) {
+                                if (firstMonthDigit > 1) {
+                                    formatted += '0' + digits[monthStart];
+                                    i = monthStart + 1;
+                                } else if (digits.length > monthStart + 1) {
+                                    const twoDigits = parseInt(digits.slice(monthStart, monthStart + 2), 10);
+                                    if (twoDigits > 12) {
+                                        formatted += '0' + digits[monthStart];
+                                        i = monthStart + 1;
+                                    } else {
+                                        formatted += digits.slice(monthStart, monthStart + 2);
+                                        i = monthStart + 2;
+                                    }
+                                }
+                            } else {
+                                formatted += digits[monthStart];
+                                i = monthStart + 1;
+                            }
+                        }
+                    }
+
+                    // Add slash after month if we have year digits
+                    if (i < digits.length && formatted.length === 5) {
+                        formatted += '/';
+                        // Year part (up to 4 digits)
+                        formatted += digits.slice(i, i + 4);
+                    }
+
+                    val = formatted;
                 }
+
                 setInputValue(val);
 
-                // Auto-validate when complete
-                if (digits.length >= 8) {
+                // Auto-validate when we have a complete date (DD/MM/YYYY format)
+                if (val.length === 10 && val.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
                     const parsed = parseSmartDate(val);
                     if (parsed) {
                         onSelectDate(formatDateISO(parsed));
@@ -647,26 +714,33 @@
                         <DatePickerModal isOpen={isDatePickerOpen} onClose={() => setIsDatePickerOpen(false)} currentDate={date} onSelectDate={setDate} accentColor={accentColor} />
                         <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
 
-                        {/* Logo top left */}
-                        <div className="absolute top-[env(safe-area-inset-top)] sm:top-6 left-4 sm:left-6 z-40 mt-4 sm:mt-0">
-                            <div className="flex items-center gap-2 bg-white/40 dark:bg-black/40 backdrop-blur-md rounded-full pl-1.5 pr-3 py-1.5 shadow-sm border border-white/20">
-                                <div className="w-6 h-6 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center text-white">
-                                    <i className="ph ph-arrows-left-right text-sm"></i>
+                        {/* Header bar - iOS style with safe area */}
+                        <div className="absolute top-0 left-0 right-0 z-40 pt-[max(env(safe-area-inset-top),12px)] px-4 sm:px-6 pb-3">
+                            <div className="flex items-center justify-between">
+                                {/* Logo left */}
+                                <div className="flex items-center gap-2 bg-white/50 dark:bg-black/50 backdrop-blur-xl rounded-full pl-1.5 pr-3 h-9 shadow-sm border border-white/30 dark:border-white/10">
+                                    <div className="w-6 h-6 bg-blue-600 dark:bg-blue-500 rounded-md flex items-center justify-center text-white flex-shrink-0">
+                                        <i className="ph ph-arrows-left-right text-sm"></i>
+                                    </div>
+                                    <span className="text-[13px] font-semibold text-gray-700 dark:text-gray-200 tracking-tight">Condamine</span>
                                 </div>
-                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 tracking-tight">Condamine</span>
+
+                                {/* Actions right - iOS 44pt touch targets */}
+                                <div className="flex items-center gap-2">
+                                    <button onClick={handleShare} className="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 bg-white/50 dark:bg-black/50 hover:bg-white/80 dark:hover:bg-black/80 rounded-full shadow-sm backdrop-blur-xl border border-white/30 dark:border-white/10 transition-all active:scale-95">
+                                        <i className="ph ph-share-network text-[17px]"></i>
+                                    </button>
+                                    <button onClick={() => { feedback(); setIsAboutOpen(true); }} className="w-9 h-9 flex items-center justify-center text-gray-600 dark:text-gray-300 bg-white/50 dark:bg-black/50 hover:bg-white/80 dark:hover:bg-black/80 rounded-full shadow-sm backdrop-blur-xl border border-white/30 dark:border-white/10 transition-all active:scale-95">
+                                        <i className="ph ph-info text-[17px]"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Actions top right */}
-                        <div className="absolute top-[env(safe-area-inset-top)] sm:top-6 right-4 sm:right-6 flex gap-3 z-40 mt-4 sm:mt-0">
-                            <button onClick={handleShare} className="p-3 text-gray-600 dark:text-gray-300 bg-white/40 dark:bg-black/40 hover:bg-white dark:hover:bg-gray-800 rounded-full shadow-sm backdrop-blur-md transition-all"><i className="ph ph-share-network text-lg"></i></button>
-                            <button onClick={handleScreenshot} className="p-3 text-gray-600 dark:text-gray-300 bg-white/40 dark:bg-black/40 hover:bg-white dark:hover:bg-gray-800 rounded-full shadow-sm backdrop-blur-md transition-all"><i className="ph ph-camera text-lg"></i></button>
-                            <button onClick={() => setIsAboutOpen(true)} className="p-3 text-gray-600 dark:text-gray-300 bg-white/40 dark:bg-black/40 hover:bg-white dark:hover:bg-gray-800 rounded-full shadow-sm backdrop-blur-md transition-all"><i className="ph ph-info text-lg"></i></button>
-                        </div>
-
-                        <div className="w-full max-w-md px-4 sm:px-4 py-4 sm:py-0 z-10 mx-auto">
-                            <div ref={captureRef} className="p-4 sm:p-8 -m-4 sm:-m-8 rounded-[3rem]">
-                                <div className="glass-panel w-full rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-visible transition-all duration-300 relative border-b-0 sm:border-b dark:border-white/10">
+                        {/* Main content - proper iOS spacing */}
+                        <div className="w-full max-w-md px-4 sm:px-6 pt-16 pb-6 z-10 mx-auto flex flex-col min-h-[100dvh] sm:min-h-0 sm:py-0">
+                            <div className="flex-1 flex flex-col justify-center">
+                                <div ref={captureRef} className="glass-panel w-full rounded-[28px] shadow-2xl overflow-hidden transition-all duration-300 relative dark:border dark:border-white/10">
                                     <div className="p-5 sm:p-6 pb-2 relative z-10">
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">Je convertis</label>
@@ -682,22 +756,24 @@
                                         </div>
                                     </div>
 
-                                    <div className="relative h-12 w-full my-0 z-30 flex items-center justify-between px-5 sm:px-6">
-                                        <button onClick={handleSwitch} className="bg-white dark:bg-gray-800 p-3 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 active:scale-90 transition-all group flex items-center justify-center">
+                                    {/* Swap button row */}
+                                    <div className="relative h-14 w-full my-0 z-30 flex items-center justify-between px-5 sm:px-6">
+                                        <button onClick={handleSwitch} className="w-11 h-11 bg-white dark:bg-gray-800 rounded-full shadow-lg border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 active:scale-90 transition-all group flex items-center justify-center flex-shrink-0">
                                             <i className="ph ph-arrows-down-up text-xl group-active:rotate-180 transition-transform duration-300"></i>
                                         </button>
                                         <button
-                                            onClick={() => setIsDatePickerOpen(true)}
+                                            onClick={() => { feedback(); setIsDatePickerOpen(true); }}
                                             className="flex items-center gap-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-full shadow-md border border-white/60 dark:border-gray-600 h-10 px-4 hover:bg-white dark:hover:bg-gray-800 active:scale-95 transition-all"
                                         >
-                                            <i className={`ph ph-calendar-blank text-lg ${accentColor}`}></i>
-                                            <span className="text-sm font-bold text-gray-600 dark:text-gray-300">{formatDateForDisplay(date)}</span>
+                                            <i className={`ph ph-calendar-blank text-[17px] ${accentColor}`}></i>
+                                            <span className="text-[13px] font-bold text-gray-600 dark:text-gray-300">{formatDateForDisplay(date)}</span>
                                             <i className="ph ph-caret-down text-xs text-gray-400"></i>
                                         </button>
-                                        <div className="w-12"></div>
+                                        <div className="w-11"></div>
                                     </div>
 
-                                    <div className="p-5 sm:p-6 pt-6 bg-white/40 dark:bg-black/40 backdrop-blur-md rounded-b-none sm:rounded-b-[2.5rem] relative z-20 border-t border-white/20 dark:border-white/5 pb-8 sm:pb-6">
+                                    {/* Result section */}
+                                    <div className="p-5 sm:p-6 pt-5 bg-white/40 dark:bg-black/40 backdrop-blur-md relative z-20 border-t border-white/20 dark:border-white/5">
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">J'obtiens</label>
                                             <button onClick={() => { feedback(); setIsToPickerOpen(true); }} className="flex items-center gap-2 px-3 py-1.5 bg-white/60 dark:bg-black/40 hover:bg-white dark:hover:bg-gray-800 rounded-full shadow-sm border border-white/50 dark:border-white/10 active:scale-95 transition-all">
@@ -746,11 +822,13 @@
                                         )}
                                     </div>
                                 </div>
-                                <div className="mt-8 text-center opacity-60 flex flex-col items-center">
-                                    <p className="text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 font-bold mb-1">
-                                        Designé par <a href="https://imaginative-youtiao-371d08.netlify.app" target="_blank" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Condamine Apps</a>
-                                    </p>
-                                </div>
+                            </div>
+
+                            {/* Footer - iOS style */}
+                            <div className="py-4 text-center">
+                                <p className="text-[11px] text-gray-500/60 dark:text-gray-400/60 font-medium">
+                                    Condamine Apps
+                                </p>
                             </div>
                         </div>
                     </div>
